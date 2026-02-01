@@ -50,7 +50,7 @@ bcrypt==4.1.2
 
 # Utilities
 requests==2.31.0
-python-magic-bin==0.4.14  # For file type detection on Windows
+python-magic==0.4.27
 
 # Testing (optional)
 # pytest==7.4.3
