@@ -1,11 +1,18 @@
 # Flask Framework
 Flask==3.0.0
 Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
 Flask-WTF==1.2.1
 Flask-Migrate==4.0.5
-Flask-Login==0.6.3
 Werkzeug==3.0.1
 WTForms==3.1.1
+
+# Production Server
+gunicorn==21.2.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
 
 # Image Processing & OCR
 Pillow==10.1.0
@@ -14,93 +21,30 @@ pdf2image==1.17.0
 
 # PDF Processing
 PyPDF2==3.0.1
+reportlab==4.0.7
+weasyprint==61.2
 
 # Data Processing
-pandas==2.1.3
+pandas==2.1.4
 numpy==1.26.2
 openpyxl==3.1.2
 
 # Machine Learning & NLP
 scikit-learn==1.3.2
 spacy==3.7.2
+sentence-transformers==2.2.2
 
-# AI/LLM Libraries (uncomment what you need)
-# anthropic==0.39.0
-# openai==1.59.5
-# langchain==0.3.13
-# langchain-community==0.3.13
-# chromadb==0.5.23
+# Text Processing
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.23.0
 
-# Date/Time Handling
+# Utilities
 python-dateutil==2.8.2
-
-# PDF Generation
-reportlab==4.0.7
-
-# Environment Variables
 python-dotenv==1.0.0
-
-# Database
-# psycopg2-binary==2.9.9  # PostgreSQL (uncomment if needed)
-# pymysql==1.1.0  # MySQL (uncomment if needed)
+python-magic==0.4.27
+requests==2.31.0
+cachetools==5.3.2
 
 # Security
 cryptography==41.0.7
 bcrypt==4.1.2
-
-# Utilities
-requests==2.31.0
-python-magic==0.4.27
-
-# Testing (optional)
-# pytest==7.4.3
-# pytest-flask==1.3.0
-
-# Production Server (optional)
-# gunicorn==21.2.0  # Linux/Mac
-# waitress==2.1.2  # Windows
-
-Flask==3.0.0
-Flask-SQLAlchemy==3.1.1
-Flask-WTF==1.2.1
-Werkzeug==3.0.1
-Pillow==10.1.0
-pytesseract==0.3.10
-PyPDF2==3.0.1
-pandas==2.1.3
-numpy==1.26.2
-scikit-learn==1.3.2
-spacy==3.7.2
-python-dateutil==2.8.2
-openpyxl==3.1.2
-reportlab==4.0.7
-python-dotenv==1.0.0
-WTForms==3.1.1
-sentence-transformers==2.2.2
-fuzzywuzzy==0.18.0
-python-Levenshtein==0.23.0
-cachetools==5.3.2
-python-dateutil==2.8.2
-weasyprint==61.2
-
-Flask==3.0.0
-Flask-SQLAlchemy==3.1.1
-Flask-Login==0.6.3
-Werkzeug==3.0.1
-python-dotenv==1.0.0
-pytesseract==0.3.10
-Pillow==10.1.0
-PyPDF2==3.0.1
-pandas==2.1.4
-numpy==1.26.2
-openpyxl==3.1.2
-sqlalchemy==2.0.23
-gunicorn==21.2.0
-
-# AI/ML libraries (adjust versions as needed)
-# anthropic==0.7.0  # Uncomment if using Claude API
-# openai==1.3.0     # Uncomment if using OpenAI API
-
-# Additional utilities
-python-dateutil==2.8.2
-psycopg2-binary==2.9.9
