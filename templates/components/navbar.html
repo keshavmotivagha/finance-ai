@@ -2,7 +2,7 @@
     <div class="nav-container">
         <div class="nav-brand">
             <a href="/">
-<img src="{{ url_for('static', filename='components/logo.png') }}" alt="Finance AI Logo" class="nav-logo">
+                <img src="{{ url_for('static', filename='components/logo.png') }}" alt="Finance AI Logo" class="nav-logo">
                 <span>Finance AI</span>
             </a>
         </div>
@@ -21,6 +21,14 @@
                 <div class="notification-bell-container" onclick="window.location.href='/notifications'" title="Notifications">
                     <span class="notification-bell">🔔</span>
                     <span class="notification-badge hide" id="notificationBadge">0</span>
+                </div>
+            </li>
+            
+            <!-- ✅ FIXED: LOGOUT BUTTON -->
+            <li class="nav-user">
+                <div class="user-menu">
+                    <span class="user-name">{{ current_user.full_name or current_user.username }}</span>
+                    <a href="/logout" class="logout-btn" onclick="event.preventDefault(); logout();">Logout</a>
                 </div>
             </li>
         </ul>
@@ -176,6 +184,46 @@
         display: none;
     }
 
+    /* ✅ User menu styles */
+    .nav-user {
+        margin-left: 15px;
+        border-left: 1px solid rgba(212, 197, 176, 0.3);
+        padding-left: 15px;
+    }
+
+    .user-menu {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .user-name {
+        color: #2C3E50;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .logout-btn {
+        background: #FF6B6B !important;
+        color: white !important;
+        padding: 8px 16px !important;
+        border-radius: 6px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        cursor: pointer;
+    }
+
+    .logout-btn::after {
+        display: none !important;
+    }
+
+    .logout-btn:hover {
+        background: #FF5252 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
     @media (max-width: 1024px) {
         .nav-menu {
             gap: 2px;
@@ -184,6 +232,10 @@
         .nav-menu a {
             padding: 20px 12px;
             font-size: 14px;
+        }
+        
+        .user-name {
+            display: none;
         }
     }
 
@@ -219,7 +271,7 @@
     // Highlight active page
     document.addEventListener('DOMContentLoaded', function() {
         const currentPath = window.location.pathname;
-        const navLinks = document.querySelectorAll('.nav-menu a');
+        const navLinks = document.querySelectorAll('.nav-menu a:not(.logout-btn)');
         
         navLinks.forEach(link => {
             if (link.getAttribute('href') === currentPath) {
@@ -244,6 +296,35 @@
                 }
             })
             .catch(error => console.error('Error loading notification count:', error));
+    }
+
+    // ✅ FIXED: Proper logout function
+    function logout() {
+        // Show loading state
+        const logoutBtn = document.querySelector('.logout-btn');
+        const originalText = logoutBtn.textContent;
+        logoutBtn.textContent = 'Logging out...';
+        logoutBtn.style.pointerEvents = 'none';
+        
+        // Perform logout
+        fetch('/logout', {
+            method: 'GET',
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            // Force redirect to login page
+            window.location.href = '/login';
+        })
+        .catch(error => {
+            console.error('Logout error:', error);
+            // Still redirect even if error
+            window.location.href = '/login';
+        });
+        
+        // Backup timeout
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 1000);
     }
 
     // Refresh notification count every 30 seconds
