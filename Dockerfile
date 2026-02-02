@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir spacy==3.7.5 sentence-transformers==2.7.0 transformers==4.41.2 && \
     pip install --no-cache-dir -r requirements.txt && \
-    python -m spacy download en_core_web_sm --no-deps && \
+    python -m spacy download en_core_web_md --no-deps && \
     rm -rf /root/.cache/pip/*
 
 # Pre-download sentence transformer model
