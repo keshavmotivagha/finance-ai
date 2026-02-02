@@ -101,10 +101,6 @@ def create_conversation():
         db.session.add(conversation)
         db.session.commit()
         
-        # Don't initialize the bot here — nothing to reset on a new empty
-        # conversation. The bot inits lazily on first message, and
-        # process_message() auto-resets context when conversation_id changes.
-        
         return jsonify({
             'success': True,
             'conversation': conversation.to_dict()
@@ -153,6 +149,7 @@ def delete_conversation(conversation_id):
 def send_message(conversation_id):
     """
     Send a message and get AI response using semantic understanding
+    ✅ FIXED: Better error handling for chatbot initialization failures
     """
     try:
         conversation = Conversation.query.filter_by(
@@ -182,28 +179,52 @@ def send_message(conversation_id):
             content=user_message_content
         )
         db.session.add(user_message)
+        db.session.flush()  # Get the ID without committing yet
         
-        # 2. Process with semantic chatbot (lazy init happens here on first message)
-        bot = get_semantic_bot()
-        ai_response = bot.process_message(
-            query=user_message_content,
-            conversation_id=conversation_id
-        )
-        
-        # 3. Save AI response message
-        assistant_message = Message(
-            conversation_id=conversation_id,
-            role='assistant',
-            content=ai_response['response'],
-            intent=ai_response.get('intent'),
-            confidence=ai_response.get('confidence')
-        )
-        
-        # Store entities if available
-        if ai_response.get('understanding', {}).get('entities'):
-            assistant_message.set_entities(ai_response['understanding']['entities'])
-        
-        db.session.add(assistant_message)
+        # 2. Process with semantic chatbot
+        try:
+            bot = get_semantic_bot()
+            ai_response = bot.process_message(
+                query=user_message_content,
+                conversation_id=conversation_id
+            )
+            
+            # 3. Save AI response message
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=ai_response['response'],
+                intent=ai_response.get('intent'),
+                confidence=ai_response.get('confidence')
+            )
+            
+            # Store entities if available
+            if ai_response.get('understanding', {}).get('entities'):
+                assistant_message.set_entities(ai_response['understanding']['entities'])
+            
+            db.session.add(assistant_message)
+            
+        except RuntimeError as e:
+            # Chatbot init failure - save friendly error message
+            print(f"❌ RuntimeError in send_message: {str(e)}", flush=True)
+            
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=(
+                    "I'm having trouble initializing my AI models right now. "
+                    "This usually happens when the server is starting up or under heavy load. "
+                    "Please try again in a moment, or refresh the page."
+                )
+            )
+            db.session.add(assistant_message)
+            ai_response = {
+                'response': assistant_message.content,
+                'intent': 'error',
+                'data': None,
+                'chart_type': None,
+                'understanding': {'error': str(e)}
+            }
         
         # 4. Update conversation metadata
         conversation.updated_at = datetime.utcnow()
@@ -212,9 +233,10 @@ def send_message(conversation_id):
         if not conversation.title or conversation.title == 'New Conversation':
             conversation.title = Conversation.generate_title(user_message_content)
         
+        # 5. Commit all changes
         db.session.commit()
         
-        # 5. Return response
+        # 6. Return response
         return jsonify({
             'success': True,
             'user_message': user_message.to_dict(),
@@ -224,18 +246,9 @@ def send_message(conversation_id):
             'understanding': ai_response.get('understanding')
         })
         
-    except RuntimeError as e:
-        # Chatbot init failure — return a clear message to the user
-        db.session.rollback()
-        print(f"RuntimeError in send_message: {str(e)}", flush=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 503  # 503 Service Unavailable is more accurate than 500 here
-        
     except Exception as e:
         db.session.rollback()
-        print(f"Error in send_message: {str(e)}", flush=True)
+        print(f"❌ Error in send_message: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         
@@ -385,6 +398,3 @@ def chatbot_status():
             'success': False,
             'error': str(e)
         }), 500
-    
-
-    
