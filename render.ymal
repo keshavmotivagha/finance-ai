@@ -9,6 +9,9 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     
+    # Add this to force Docker build
+    dockerCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --preload
+    
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -33,14 +36,12 @@ services:
       - key: ALLOWED_EXTENSIONS
         value: pdf,png,jpg,jpeg,gif,bmp,tiff,webp
       
-      # Memory optimization
       - key: MALLOC_TRIM_THRESHOLD_
         value: "100000"
       
       - key: MALLOC_MMAP_THRESHOLD_
         value: "100000"
       
-      # AI Model configuration
       - key: TRANSFORMERS_CACHE
         value: /tmp/transformers_cache
       
