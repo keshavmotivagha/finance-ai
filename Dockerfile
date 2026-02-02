@@ -36,9 +36,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     # Install PyTorch CPU-only (700MB instead of 2GB)
     pip install --no-cache-dir torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu && \
-    # Install other ML packages
+    # Install other ML packages - FIXED VERSION HERE
     pip install --no-cache-dir \
-        sentence-transformers==3.0.1 \
+        sentence-transformers==2.7.0 \
         transformers==4.41.2 \
         spacy==3.7.5 && \
     # Install remaining requirements (exclude torch as already installed)
@@ -73,12 +73,12 @@ RUN useradd -m -u 1000 appuser && \
 # Switch to non-root user
 USER appuser
 
-# Expose port
+# Expose port (Railway will use $PORT environment variable)
 EXPOSE 10000
 
-# Lightweight health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10000/health', timeout=5)" || exit 1
+# Lightweight health check (optional - remove if you don't have a /health endpoint)
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+#     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10000/health', timeout=5)" || exit 1
 
 # MEMORY-OPTIMIZED gunicorn for Railway
 CMD gunicorn app:app \
