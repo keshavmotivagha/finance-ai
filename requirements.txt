@@ -7,7 +7,7 @@ Flask-Migrate==4.0.7
 Werkzeug==3.0.3
 WTForms==3.1.2
 
-# Production Server
+# Production Server - CRITICAL
 gunicorn==22.0.0
 gevent==24.2.1
 
@@ -34,11 +34,9 @@ python-pptx==0.6.23
 # Computer Vision
 opencv-python-headless==4.10.0.84
 
-# NLP & Machine Learning (installed separately in Dockerfile)
-# spacy==3.7.5
-# sentence-transformers==2.7.0
-# transformers==4.41.2
-# torch==2.3.1
+# NLP & Machine Learning
+# NOTE: torch, sentence-transformers, transformers, and spacy are installed in Dockerfile
+# Do NOT include them here to avoid conflicts
 
 # Additional ML dependencies
 scikit-learn==1.5.0
