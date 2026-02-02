@@ -1,9 +1,6 @@
 FROM python:3.11-slim
 
-# CACHE BUSTER - change this date to force rebuild
-ENV CACHE_BUST=2024-02-03-v1
-
-# Environment variables
+# Environment variables for optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MALLOC_TRIM_THRESHOLD_=100000 \
@@ -21,23 +18,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Set working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy requirements first for better caching
 COPY requirements.txt .
+
+# Install Python dependencies and spaCy model in one layer
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
-# Install spaCy model - DIRECT DOWNLOAD METHOD
-RUN pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
-
-# Pre-download sentence transformer
+# Pre-download sentence transformer model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-# Copy app
+# Copy application code
 COPY . .
 
-# Create directories
+# Create necessary directories
 RUN mkdir -p uploads temp_files static/uploads /tmp/transformers_cache /tmp/sentence_transformers && \
     chmod -R 755 uploads temp_files static
 
@@ -45,13 +43,17 @@ RUN mkdir -p uploads temp_files static/uploads /tmp/transformers_cache /tmp/sent
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app /tmp/transformers_cache /tmp/sentence_transformers
 
+# Switch to non-root user
 USER appuser
 
+# Expose port
 EXPOSE 10000
 
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:10000/health', timeout=5)"
 
+# Run gunicorn
 CMD gunicorn app:app \
     --bind 0.0.0.0:$PORT \
     --workers 1 \
