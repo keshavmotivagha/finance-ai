@@ -552,7 +552,3 @@ function showNotification(message, type = 'info') {
 
 console.log('✅ transactions.js loaded successfully');
 
-
-
-
-
