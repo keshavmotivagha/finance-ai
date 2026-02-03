@@ -387,35 +387,34 @@
             <button class="btn-secondary" onclick="window.location.href='/upload'">
                 📤 Upload Document
             </button>
-            <button class="btn-primary" onclick="showAddTransactionModal()">
+            <button class="btn-primary" id="addTransactionBtn">
                 ➕ Add Transaction
             </button>
         </div>
     </div>
 
-   <!-- Stats -->
-<div class="transaction-stats">
-    <div class="stat-card">
-        <div class="stat-value" id="totalTransactions">0</div>
-        <div class="stat-label">Total Transactions</div>
-    </div>
+    <!-- Stats -->
+    <div class="transaction-stats">
+        <div class="stat-card">
+            <div class="stat-value" id="totalTransactions">0</div>
+            <div class="stat-label">Total Transactions</div>
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-value" id="totalAmount">₹0</div>
-        <div class="stat-label">Total Amount</div>
-    </div>
+        <div class="stat-card">
+            <div class="stat-value" id="totalAmount">₹0</div>
+            <div class="stat-label">Total Amount</div>
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-value" id="avgTransaction">₹0</div>
-        <div class="stat-label">Avg Transaction</div>
-    </div>
+        <div class="stat-card">
+            <div class="stat-value" id="avgTransaction">₹0</div>
+            <div class="stat-label">Avg Transaction</div>
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-value" id="thisMonth">₹0</div>
-        <div class="stat-label">This Month</div>
+        <div class="stat-card">
+            <div class="stat-value" id="thisMonth">₹0</div>
+            <div class="stat-label">This Month</div>
+        </div>
     </div>
-</div>
-
 
     <!-- Filters -->
     <div class="filters-bar">
