@@ -33,6 +33,14 @@ from routes.auth_routes import auth_bp
 import psutil
 import gc
 
+@login_manager.user_loader
+def load_user(user_id):
+    try:
+        return db.session.get(User, int(user_id))
+    except Exception as e:
+        print("❌ load_user failed:", e)
+        return None
+
 
 def create_app():
     """Application factory with authentication - PRODUCTION OPTIMIZED"""
