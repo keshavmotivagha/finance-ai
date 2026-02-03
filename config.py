@@ -15,7 +15,7 @@ class Config:
 
     if DATABASE_URL:
         SQLALCHEMY_DATABASE_URI = DATABASE_URL.replace(
-            "postgresql://postgres:VifCODRbhTjpCpsSugqWPggqWhgLvROu@postgres.railway.internal:5432/railway"
+            "postgres://", "postgresql://", 1
         )
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(BASE_DIR, "finance_app.db")
