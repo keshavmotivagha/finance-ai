@@ -1,11 +1,11 @@
 """
-FIXED Flask Application with Proper Authentication
-Save as: app.py
+PRODUCTION-READY Flask Application
+Railway-optimized with lazy loading and no blocking startup operations
 """
 
 from flask import Flask, render_template, jsonify, request, redirect, url_for, send_from_directory
 from config import Config
-from models.database import db, init_db
+from models.database import db
 from models.document import Document
 from models.transaction import Transaction
 from models.category import Category, DEFAULT_CATEGORIES
@@ -14,8 +14,6 @@ from utils.db_utils import DatabaseUtils
 from utils.seed_data import SeedData
 from utils.file_handler import FileHandler
 from werkzeug.utils import secure_filename
-from utils.processor import DocumentProcessingWorkflow
-from ai_modules.smart_nlp import EnhancedSmartNLPProcessor
 from utils.performance_monitor import perf_monitor
 from models.conversation import Conversation
 from models.message import Message
@@ -37,7 +35,7 @@ import gc
 
 
 def create_app():
-    """Application factory with authentication"""
+    """Application factory with authentication - PRODUCTION OPTIMIZED"""
 
     from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -61,7 +59,15 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    init_db(app)
+    # ========================================================================
+    # ✅ DATABASE INITIALIZATION - NO BLOCKING OPERATIONS
+    # ========================================================================
+    # Initialize SQLAlchemy WITHOUT create_all() or test queries
+    db.init_app(app)
+    
+    # ❌ REMOVED: init_db(app) - prevents startup hang
+    # Database tables are created manually via shell or migrations
+    # This ensures Railway deployment completes in <60 seconds
 
     # ========================================================================
     # FLASK-LOGIN SETUP
@@ -215,7 +221,7 @@ def upload_page():
 
 
 # ============================================================================
-# ✅ FIXED: HEALTH CHECK (NO AUTH REQUIRED)
+# ✅ HEALTH CHECK (NO AUTH REQUIRED) - CRITICAL FOR RAILWAY
 # ============================================================================
 
 @app.route('/health')
@@ -413,7 +419,11 @@ def get_document_details(doc_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Document processing
+
+# ============================================================================
+# ✅ DOCUMENT PROCESSING - LAZY LOADED (NO STARTUP IMPORT)
+# ============================================================================
+
 processor = None
 
 @app.route('/api/process-document/<int:doc_id>', methods=['POST'])
@@ -422,9 +432,12 @@ def process_document(doc_id):
     global processor
 
     try:
-        # ✅ Lazy initialization (runs only on first request)
+        # ✅ Lazy initialization - imports ONLY when first API call is made
         if processor is None:
+            print("🔄 Lazy-loading DocumentProcessingWorkflow...")
+            from utils.processor import DocumentProcessingWorkflow
             processor = DocumentProcessingWorkflow()
+            print("✅ DocumentProcessingWorkflow initialized")
 
         success, message = processor.process_document(doc_id)
 
@@ -448,7 +461,16 @@ def process_document(doc_id):
 @app.route('/api/process-all-documents', methods=['POST'])
 @login_required
 def process_all_documents():
+    global processor
+    
     try:
+        # ✅ Lazy load processor
+        if processor is None:
+            print("🔄 Lazy-loading DocumentProcessingWorkflow...")
+            from utils.processor import DocumentProcessingWorkflow
+            processor = DocumentProcessingWorkflow()
+            print("✅ DocumentProcessingWorkflow initialized")
+        
         documents = Document.query.filter_by(processed=False).all()
 
         if not documents:
@@ -478,7 +500,7 @@ def process_all_documents():
 
 
 # ============================================================================
-# NLP / CHAT API (legacy endpoint)
+# ✅ NLP / CHAT API - LAZY LOADED (NO STARTUP IMPORT)
 # ============================================================================
 
 nlp_processor = None
@@ -489,8 +511,10 @@ def process_query():
     try:
         global nlp_processor
 
+        # ✅ Lazy initialization - imports ONLY when first API call is made
         if nlp_processor is None:
-            print("🔄 Initializing NLP Processor...")
+            print("🔄 Lazy-loading EnhancedSmartNLPProcessor...")
+            from ai_modules.smart_nlp import EnhancedSmartNLPProcessor
             nlp_processor = EnhancedSmartNLPProcessor()
             print("✅ Smart NLP Processor initialized")
 
@@ -850,7 +874,7 @@ def validate_duplicate():
 
 
 # ============================================================================
-# MEMORY MANAGEMENT
+# MEMORY MANAGEMENT - PRODUCTION OPTIMIZATION
 # ============================================================================
 
 @app.before_request
@@ -860,7 +884,7 @@ def log_memory():
         process = psutil.Process()
         memory_mb = process.memory_info().rss / 1024 / 1024
         
-        if memory_mb > 400:  # 400MB on 512MB limit
+        if memory_mb > 400:  # 400MB threshold on 512MB limit
             print(f"⚠️ High memory ({memory_mb:.1f} MB), forcing cleanup...")
             gc.collect()
 
@@ -872,6 +896,7 @@ def cleanup_after_request(response):
 
 
 # ============================================================================
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+# ✅ PRODUCTION STARTUP - REMOVED if __name__ == "__main__" BLOCK
+# ============================================================================
+# Railway uses Gunicorn, not Flask's built-in server
+# No app.run() call needed - this prevents port conflicts and double servers
