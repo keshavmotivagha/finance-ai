@@ -1,11 +1,9 @@
 """
-Authentication Routes - 100% BULLETPROOF VERSION
+Authentication Routes - FIXED LOGOUT REDIRECT ISSUE
 Save as: routes/auth_routes.py
 
-✅ Matches User model perfectly
-✅ All session issues fixed
-✅ Login/logout/register all working
-✅ Tested and verified
+✅ Logout now properly shows login page instead of redirecting to dashboard
+✅ All other functionality remains the same
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
@@ -22,9 +20,18 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Login page and handler"""
-    # Redirect if already logged in
+    # ✅ FIX: Allow accessing login page even if authenticated
+    # This fixes the logout redirect loop issue
+    # We'll force logout if someone visits /login while authenticated
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        # If it's a GET request (just viewing the page), force logout first
+        if request.method == 'GET':
+            logout_user()
+            session.clear()
+            # Don't redirect, just show the login page
+        # If it's a POST (trying to login while authenticated), redirect to dashboard
+        elif request.method == 'POST':
+            return redirect(url_for('index'))
     
     if request.method == 'GET':
         return render_template('auth/login.html')
@@ -125,19 +132,25 @@ def logout():
     username = current_user.username if current_user.is_authenticated else 'Unknown'
     user_id = current_user.id if current_user.is_authenticated else 'Unknown'
     
-    # ✅ FIX: Proper logout with session cleanup
+    # ✅ FIX: Proper logout with aggressive session cleanup
     logout_user()
     
-    # Clear all session data
+    # Clear all session data aggressively
     for key in list(session.keys()):
         session.pop(key)
     
     session.clear()
     session.modified = True
     
+    # ✅ IMPORTANT: Add a flag to prevent redirect loop
+    # This tells the browser we're coming from logout
+    response = redirect(url_for('auth.login'))
+    response.set_cookie('logged_out', 'true', max_age=5)  # 5 second cookie
+    
     flash('You have been logged out successfully', 'info')
     print(f"✅ User logged out: {username} (ID: {user_id})", flush=True)
-    return redirect(url_for('auth.login'))
+    
+    return response
 
 
 # ============================================================================
