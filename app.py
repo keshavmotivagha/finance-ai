@@ -65,6 +65,10 @@ def create_app():
     # ========================================================================
     # Initialize SQLAlchemy WITHOUT create_all() or test queries
     db.init_app(app)
+
+    from utils.db_init import init_db_once
+    init_db_once(app)
+
     
     # ❌ REMOVED: init_db(app) - prevents startup hang
     # Database tables are created manually via shell or migrations
