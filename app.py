@@ -1,7 +1,8 @@
 """
 PRODUCTION-READY Flask Application
-Railway-optimized with lazy loading and no blocking startup operations
-✅ INCLUDES CHATBOT PRE-WARMING TO PREVENT TIMEOUT ERRORS
+✅ IMPROVED: Better chatbot pre-warming
+✅ IMPROVED: No blocking operations
+✅ IMPROVED: Immediate startup with background loading
 """
 
 from flask import Flask, render_template, jsonify, request, redirect, url_for, send_from_directory
@@ -18,7 +19,7 @@ from werkzeug.utils import secure_filename
 from utils.performance_monitor import perf_monitor
 from models.conversation import Conversation
 from models.message import Message
-from routes.chat_routes_semantic import chat_bp
+from routes.chat_routes_semantic import chat_bp, initialize_bot_background
 from routes.reports import report_bp
 import os
 from routes.budget_routes import budget_bp
@@ -61,18 +62,12 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # ========================================================================
-    # ✅ DATABASE INITIALIZATION - NO BLOCKING OPERATIONS
+    # DATABASE INITIALIZATION - NO BLOCKING OPERATIONS
     # ========================================================================
-    # Initialize SQLAlchemy WITHOUT create_all() or test queries
     db.init_app(app)
 
     from utils.db_init import init_db_once
     init_db_once(app)
-
-    
-    # ❌ REMOVED: init_db(app) - prevents startup hang
-    # Database tables are created manually via shell or migrations
-    # This ensures Railway deployment completes in <60 seconds
 
     # ========================================================================
     # FLASK-LOGIN SETUP
@@ -88,7 +83,7 @@ def create_app():
         return db.session.get(User, int(user_id))
 
     # ========================================================================
-    # ✅ FIXED: API AUTHENTICATION HANDLING
+    # API AUTHENTICATION HANDLING
     # ========================================================================
     @app.before_request
     def handle_api_authentication():
@@ -98,9 +93,6 @@ def create_app():
         """
         from flask import request, jsonify
         from flask_login import current_user
-        
-        # Log every request for debugging
-        print(f"🔍 Request: {request.path} | Authenticated: {current_user.is_authenticated}")
         
         # Skip for static files and health check
         if request.path.startswith('/static/') or request.path == '/health':
@@ -146,48 +138,18 @@ def create_app():
     app.register_blueprint(hdfc_bp)
 
     # ========================================================================
-    # ✅ CHATBOT PRE-WARMING - SOLVES 52-SECOND TIMEOUT ISSUE
+    # ✅ IMPROVED: CHATBOT PRE-WARMING
     # ========================================================================
-    def prewarm_chatbot():
-        """
-        Pre-load chatbot models in background thread.
-        This prevents the 52-second timeout on first chat message.
-        """
-        import time
-        time.sleep(10)  # Wait for app to fully start
-        
-        try:
-            print("=" * 70, flush=True)
-            print("🔥 PRE-WARMING CHATBOT MODELS...", flush=True)
-            print("=" * 70, flush=True)
-            
-            # Import and initialize the chatbot
-            from routes.chat_routes_semantic import get_semantic_bot
-            bot = get_semantic_bot()
-            
-            print("=" * 70, flush=True)
-            print("✅ CHATBOT PRE-WARMED AND READY!", flush=True)
-            print("   Chat messages will now respond instantly", flush=True)
-            print("=" * 70, flush=True)
-            
-            # Force garbage collection after loading heavy models
-            import gc
-            gc.collect()
-            
-        except Exception as e:
-            print("=" * 70, flush=True)
-            print("⚠️ CHATBOT PRE-WARMING FAILED", flush=True)
-            print(f"   Error: {e}", flush=True)
-            print("   Chatbot will initialize on first use instead", flush=True)
-            print("=" * 70, flush=True)
-            import traceback
-            traceback.print_exc()
+    # Start pre-warming immediately (no delay)
+    # Uses improved thread-safe initialization from chat_routes_semantic
+    print("=" * 70, flush=True)
+    print("🚀 Starting chatbot pre-warming (background)...", flush=True)
+    print("=" * 70, flush=True)
     
-    # Start background pre-warming thread
-    import threading
-    prewarm_thread = threading.Thread(target=prewarm_chatbot, daemon=True)
-    prewarm_thread.start()
-    print("🚀 Background chatbot pre-warming started...", flush=True)
+    prewarm_thread = initialize_bot_background()
+    
+    print("✅ App startup complete - chatbot loading in background", flush=True)
+    print("=" * 70, flush=True)
 
     return app
 
@@ -278,7 +240,7 @@ def upload_page():
 
 
 # ============================================================================
-# ✅ HEALTH CHECK (NO AUTH REQUIRED) - CRITICAL FOR RAILWAY
+# HEALTH CHECK (NO AUTH REQUIRED) - CRITICAL FOR RAILWAY
 # ============================================================================
 
 @app.route('/health')
@@ -288,12 +250,17 @@ def health_check():
         process = psutil.Process()
         memory_mb = process.memory_info().rss / 1024 / 1024
         
+        # Check chatbot status
+        from routes.chat_routes_semantic import _semantic_bot, _bot_loading
+        chatbot_status = 'ready' if _semantic_bot is not None else ('loading' if _bot_loading else 'not_loaded')
+        
         return jsonify({
             'status': 'healthy',
             'service': 'finance-app',
             'memory_mb': round(memory_mb, 1),
             'memory_percent': round(process.memory_percent(), 1),
             'database': 'connected',
+            'chatbot': chatbot_status,
             'version': '1.0.0'
         }), 200
     except Exception as e:
@@ -375,7 +342,6 @@ def get_top_vendors():
                 print(f"Error processing vendor {v}: {str(e)}")
                 continue
 
-        print(f"✅ Found {len(vendor_list)} vendors")
         return jsonify({'success': True, 'vendors': vendor_list})
 
     except Exception as e:
@@ -478,7 +444,7 @@ def get_document_details(doc_id):
 
 
 # ============================================================================
-# ✅ DOCUMENT PROCESSING - LAZY LOADED (NO STARTUP IMPORT)
+# DOCUMENT PROCESSING - LAZY LOADED (NO STARTUP IMPORT)
 # ============================================================================
 
 processor = None
@@ -489,7 +455,7 @@ def process_document(doc_id):
     global processor
 
     try:
-        # ✅ Lazy initialization - imports ONLY when first API call is made
+        # Lazy initialization
         if processor is None:
             print("🔄 Lazy-loading DocumentProcessingWorkflow...")
             from utils.processor import DocumentProcessingWorkflow
@@ -521,7 +487,7 @@ def process_all_documents():
     global processor
     
     try:
-        # ✅ Lazy load processor
+        # Lazy load processor
         if processor is None:
             print("🔄 Lazy-loading DocumentProcessingWorkflow...")
             from utils.processor import DocumentProcessingWorkflow
@@ -557,7 +523,7 @@ def process_all_documents():
 
 
 # ============================================================================
-# ✅ NLP / CHAT API - LAZY LOADED (NO STARTUP IMPORT)
+# NLP / CHAT API - LAZY LOADED (NO STARTUP IMPORT)
 # ============================================================================
 
 nlp_processor = None
@@ -568,7 +534,7 @@ def process_query():
     try:
         global nlp_processor
 
-        # ✅ Lazy initialization - imports ONLY when first API call is made
+        # Lazy initialization
         if nlp_processor is None:
             print("🔄 Lazy-loading EnhancedSmartNLPProcessor...")
             from ai_modules.smart_nlp import EnhancedSmartNLPProcessor
@@ -950,10 +916,3 @@ def cleanup_after_request(response):
     """Cleanup after each request"""
     gc.collect()
     return response
-
-
-# ============================================================================
-# ✅ PRODUCTION STARTUP - REMOVED if __name__ == "__main__" BLOCK
-# ============================================================================
-# Railway uses Gunicorn, not Flask's built-in server
-# No app.run() call needed - this prevents port conflicts and double servers
