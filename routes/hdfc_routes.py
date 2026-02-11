@@ -48,8 +48,13 @@ def connect_email():
         if parser.connect():
             parser.disconnect()
             
-            # ✅ SAVE TO DATABASE (encrypted)
-            CredentialManager.save_credentials(email_address, app_password, 'HDFC', current_user.id)
+            # ✅ SAVE TO DATABASE (encrypted) - NOW WITH user_id
+            CredentialManager.save_credentials(
+                email_address=email_address,
+                app_password=app_password,
+                bank_name='HDFC',
+                user_id=current_user.id
+            )
             
             return jsonify({
                 'success': True,
@@ -76,8 +81,8 @@ def sync_transactions():
         data = request.get_json()
         days_back = data.get('days_back', 30)
         
-        # ✅ GET CREDENTIALS FROM DATABASE
-        credentials = CredentialManager.get_credentials(current_user.id)
+        # ✅ GET CREDENTIALS FROM DATABASE - NOW WITH user_id
+        credentials = CredentialManager.get_credentials(user_id=current_user.id)
         
         if not credentials:
             return jsonify({
@@ -115,7 +120,7 @@ def sync_transactions():
         stats = sync_engine.sync_transactions(transactions)
         
         # Update last sync time
-        CredentialManager.update_last_sync(current_user.id)
+        CredentialManager.update_last_sync(user_id=current_user.id)
         
         return jsonify({
             'success': True,
@@ -162,8 +167,8 @@ def enable_auto_sync():
 def get_status():
     """Get HDFC sync status (from database)"""
     try:
-        # ✅ GET STATUS FROM DATABASE
-        credential = CredentialManager.get_active_credential(current_user.id)
+        # ✅ GET STATUS FROM DATABASE - NOW WITH user_id
+        credential = CredentialManager.get_active_credential(user_id=current_user.id)
         
         is_connected = credential is not None
         
@@ -200,8 +205,8 @@ def get_status():
 def disconnect_email():
     """Disconnect email account (deactivates in database)"""
     try:
-        # ✅ DEACTIVATE IN DATABASE
-        CredentialManager.delete_credentials(current_user.id)
+        # ✅ DEACTIVATE IN DATABASE - NOW WITH user_id
+        CredentialManager.delete_credentials(user_id=current_user.id)
         
         return jsonify({
             'success': True,
@@ -220,7 +225,7 @@ def disconnect_email():
 def test_connection():
     """Test if stored credentials still work"""
     try:
-        credentials = CredentialManager.get_credentials(current_user.id)
+        credentials = CredentialManager.get_credentials(user_id=current_user.id)
         
         if not credentials:
             return jsonify({
