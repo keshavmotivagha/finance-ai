@@ -15,8 +15,8 @@ class BankCredential(db.Model):
     """Store encrypted bank email credentials"""
     __tablename__ = 'bank_credentials'
     
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     bank_name = db.Column(db.String(50), default='HDFC')
     email_address = db.Column(db.String(255), unique=True, nullable=False)
     encrypted_password = db.Column(db.Text, nullable=False)
@@ -81,10 +81,13 @@ class CredentialManager:
         return decrypted.decode()
     
     @staticmethod
-    def save_credentials(email_address: str, app_password: str, bank_name: str = 'HDFC') -> BankCredential:
+    def save_credentials(email_address: str, app_password: str, bank_name: str = 'HDFC', user_id: int = None) -> BankCredential:
         """Save or update credentials"""
-        # Check if credentials already exist
-        existing = BankCredential.query.filter_by(email_address=email_address).first()
+        # Check if credentials already exist for this user
+        query = BankCredential.query.filter_by(email_address=email_address)
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        existing = query.first()
         
         if existing:
             # Update existing
@@ -97,6 +100,7 @@ class CredentialManager:
         else:
             # Create new
             credential = BankCredential(
+                user_id=user_id,
                 bank_name=bank_name,
                 email_address=email_address,
                 encrypted_password=CredentialManager.encrypt_password(app_password),
@@ -108,19 +112,19 @@ class CredentialManager:
             return credential
     
     @staticmethod
-    def get_credentials(email_address: str = None) -> dict:
+    def get_credentials(user_id: int = None, email_address: str = None) -> dict:
         """Get decrypted credentials"""
+        query = BankCredential.query.filter_by(is_active=True)
+        
         if email_address:
-            credential = BankCredential.query.filter_by(
-                email_address=email_address,
-                is_active=True
-            ).first()
+            query = query.filter_by(email_address=email_address)
+        elif user_id:
+            query = query.filter_by(user_id=user_id, bank_name='HDFC')
         else:
             # Get any active HDFC credential
-            credential = BankCredential.query.filter_by(
-                bank_name='HDFC',
-                is_active=True
-            ).first()
+            query = query.filter_by(bank_name='HDFC')
+        
+        credential = query.first()
         
         if credential:
             return {
@@ -132,20 +136,31 @@ class CredentialManager:
         return None
     
     @staticmethod
-    def get_active_credential() -> BankCredential:
+    def get_active_credential(user_id: int = None) -> BankCredential:
         """Get active credential object"""
-        return BankCredential.query.filter_by(
+        query = BankCredential.query.filter_by(
             bank_name='HDFC',
             is_active=True
-        ).first()
+        )
+        
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        
+        return query.first()
     
     @staticmethod
-    def delete_credentials(email_address: str = None):
+    def delete_credentials(user_id: int = None, email_address: str = None):
         """Delete or deactivate credentials"""
+        query = BankCredential.query
+        
         if email_address:
-            credential = BankCredential.query.filter_by(email_address=email_address).first()
+            query = query.filter_by(email_address=email_address)
+        elif user_id:
+            query = query.filter_by(user_id=user_id, bank_name='HDFC')
         else:
-            credential = BankCredential.query.filter_by(bank_name='HDFC').first()
+            query = query.filter_by(bank_name='HDFC')
+        
+        credential = query.first()
         
         if credential:
             credential.is_active = False
@@ -153,9 +168,9 @@ class CredentialManager:
             print(f"✅ Deactivated credentials for {credential.email_address}")
     
     @staticmethod
-    def update_last_sync():
+    def update_last_sync(user_id: int = None):
         """Update last sync timestamp"""
-        credential = CredentialManager.get_active_credential()
+        credential = CredentialManager.get_active_credential(user_id)
         if credential:
             credential.last_sync = datetime.utcnow()
             db.session.commit()
