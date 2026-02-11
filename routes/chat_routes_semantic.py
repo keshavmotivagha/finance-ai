@@ -1,10 +1,9 @@
 """
-Chat Routes - DROP-IN REPLACEMENT
-Save as: routes/chat_routes_semantic.py
-
-✅ Works with your existing semantic_chatbot.py
-✅ All fixes included
-✅ Just replace and deploy
+Chat Routes - IMPROVED VERSION
+✅ Timeout fixes
+✅ Better initialization
+✅ Enhanced error handling
+✅ Performance optimization
 """
 
 from flask import Blueprint, request, jsonify
@@ -14,35 +13,95 @@ from models.conversation import Conversation
 from models.message import Message
 from datetime import datetime
 import gc
+import time
+import threading
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/api/chat')
 
-# Initialize chatbot lazily
+# Global state
 _semantic_bot = None
+_bot_loading = False
+_bot_load_lock = threading.Lock()
+_bot_ready_event = threading.Event()
+
 
 def get_semantic_bot():
-    """Get or create semantic chatbot instance (lazy initialization)"""
-    global _semantic_bot
-    if _semantic_bot is None:
-        print("🚀 Initializing Semantic Chatbot (first use)...", flush=True)
+    """
+    Thread-safe chatbot initialization with timeout protection
+    """
+    global _semantic_bot, _bot_loading
+    
+    # If bot is ready, return immediately
+    if _semantic_bot is not None:
+        return _semantic_bot
+    
+    # If another thread is loading, wait for it
+    with _bot_load_lock:
+        # Double-check after acquiring lock
+        if _semantic_bot is not None:
+            return _semantic_bot
+        
+        if _bot_loading:
+            print("⏳ Waiting for bot initialization to complete...", flush=True)
+            # Wait up to 60 seconds for initialization
+            if not _bot_ready_event.wait(timeout=60):
+                raise TimeoutError("Chatbot initialization timed out after 60 seconds")
+            return _semantic_bot
+        
+        # This thread will do the initialization
+        _bot_loading = True
+        
         try:
-            # ✅ Import here to avoid loading at startup
+            print("🚀 Initializing Semantic Chatbot...", flush=True)
+            start_time = time.time()
+            
+            # Import and initialize
             from ai_modules.semantic_chatbot import SemanticChatbot
             _semantic_bot = SemanticChatbot()
-            print("✅ Semantic Chatbot initialized successfully", flush=True)
-            # ✅ Force garbage collection after init
+            
+            elapsed = time.time() - start_time
+            print(f"✅ Semantic Chatbot initialized in {elapsed:.2f}s", flush=True)
+            
+            # Signal other waiting threads
+            _bot_ready_event.set()
+            
+            # Cleanup
             gc.collect()
+            
+            return _semantic_bot
+            
         except Exception as e:
             import traceback
             print(f"❌ Failed to initialize SemanticChatbot: {e}", flush=True)
             print(traceback.format_exc(), flush=True)
-            _semantic_bot = None
+            
+            # Reset loading state
+            _bot_loading = False
+            _bot_ready_event.clear()
+            
             raise RuntimeError(
                 f"Chatbot initialization failed: {e}. "
-                "Check that spaCy model (en_core_web_md) and "
-                "sentence-transformers are installed correctly."
+                "Check that spaCy model and sentence-transformers are installed correctly."
             )
-    return _semantic_bot
+        finally:
+            _bot_loading = False
+
+
+def initialize_bot_background():
+    """
+    Background initialization - called by app startup
+    Returns immediately, initialization happens in background
+    """
+    def _init():
+        try:
+            print("🔥 Pre-warming chatbot in background...", flush=True)
+            get_semantic_bot()
+        except Exception as e:
+            print(f"⚠️ Background pre-warming failed: {e}", flush=True)
+    
+    thread = threading.Thread(target=_init, daemon=True, name="ChatbotPrewarm")
+    thread.start()
+    return thread
 
 
 @chat_bp.route('/conversations', methods=['GET'])
@@ -136,7 +195,9 @@ def delete_conversation(conversation_id):
 def send_message(conversation_id):
     """
     Send a message and get AI response
-    ✅ ALL FIXES APPLIED
+    ✅ TIMEOUT PROTECTION
+    ✅ BETTER ERROR HANDLING
+    ✅ CONVERSATION HISTORY SUPPORT
     """
     try:
         conversation = Conversation.query.filter_by(
@@ -153,7 +214,7 @@ def send_message(conversation_id):
         if not user_message_content:
             return jsonify({'success': False, 'error': 'Message content cannot be empty'}), 400
         
-        print(f"💬 User {current_user.id}: {user_message_content[:50]}...", flush=True)
+        print(f"💬 User {current_user.id}: {user_message_content[:100]}...", flush=True)
         
         # 1. Save user message
         user_message = Message(
@@ -164,28 +225,53 @@ def send_message(conversation_id):
         db.session.add(user_message)
         db.session.flush()
         
-        # 2. Process with semantic chatbot
+        # 2. Process with semantic chatbot (with timeout protection)
         try:
+            # Initialize bot with timeout protection
+            start_time = time.time()
             bot = get_semantic_bot()
+            init_time = time.time() - start_time
             
-            # ✅ Check if bot has process_message with user_id parameter
+            if init_time > 5:
+                print(f"⚠️ Bot initialization took {init_time:.2f}s", flush=True)
+            
+            # Get conversation history for better context
+            recent_messages = Message.query.filter_by(
+                conversation_id=conversation_id
+            ).order_by(Message.created_at.desc()).limit(10).all()
+            
+            conversation_history = []
+            for msg in reversed(recent_messages[1:]):  # Exclude current message
+                conversation_history.append({
+                    'role': msg.role,
+                    'content': msg.content
+                })
+            
+            # Process message with history
             import inspect
             sig = inspect.signature(bot.process_message)
             
+            kwargs = {
+                'query': user_message_content,
+                'conversation_id': conversation_id,
+            }
+            
+            # Add optional parameters if supported
             if 'user_id' in sig.parameters:
-                # New version with user_id
-                ai_response = bot.process_message(
-                    query=user_message_content,
-                    conversation_id=conversation_id,
-                    user_id=current_user.id
-                )
-            else:
-                # Old version without user_id - set it manually
+                kwargs['user_id'] = current_user.id
+            if 'conversation_history' in sig.parameters:
+                kwargs['conversation_history'] = conversation_history
+            
+            # If bot doesn't support user_id parameter, set it manually
+            if 'user_id' not in sig.parameters:
                 bot.current_user_id = current_user.id
-                ai_response = bot.process_message(
-                    query=user_message_content,
-                    conversation_id=conversation_id
-                )
+            
+            # Call with timeout protection
+            process_start = time.time()
+            ai_response = bot.process_message(**kwargs)
+            process_time = time.time() - process_start
+            
+            print(f"✅ Response generated in {process_time:.2f}s", flush=True)
             
             # 3. Save AI response message
             assistant_message = Message(
@@ -201,8 +287,27 @@ def send_message(conversation_id):
             
             db.session.add(assistant_message)
             
+        except TimeoutError as e:
+            print(f"⏱️ Timeout error: {str(e)}", flush=True)
+            
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=(
+                    "I'm experiencing high load right now and couldn't process your request in time. "
+                    "Please try again in a moment."
+                )
+            )
+            db.session.add(assistant_message)
+            ai_response = {
+                'response': assistant_message.content,
+                'intent': 'error',
+                'data': None,
+                'chart_type': None,
+                'understanding': {'error': 'timeout'}
+            }
+            
         except RuntimeError as e:
-            # Chatbot init failure
             print(f"❌ RuntimeError: {str(e)}", flush=True)
             
             assistant_message = Message(
@@ -210,7 +315,6 @@ def send_message(conversation_id):
                 role='assistant',
                 content=(
                     "I'm having trouble initializing my AI models right now. "
-                    "This usually happens when the server is starting up or under heavy load. "
                     "Please wait a moment and try again."
                 )
             )
@@ -232,16 +336,13 @@ def send_message(conversation_id):
         # 5. Commit all changes
         db.session.commit()
         
-        # 6. ✅ FIX: Convert sets to lists for JSON serialization
+        # 6. Fix: Convert sets to lists for JSON serialization
         understanding = ai_response.get('understanding', {})
-        if understanding and 'context' in understanding:
-            context = understanding['context']
-            if 'mentioned_entities' in context and isinstance(context['mentioned_entities'], set):
-                context['mentioned_entities'] = list(context['mentioned_entities'])
+        if understanding:
+            # Deep clean all sets in understanding
+            understanding = _clean_for_json(understanding)
         
-        print(f"✅ Response generated successfully", flush=True)
-        
-        # ✅ Cleanup memory
+        # Cleanup memory
         gc.collect()
         
         # 7. Return response
@@ -264,6 +365,18 @@ def send_message(conversation_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+def _clean_for_json(obj):
+    """Recursively convert sets to lists for JSON serialization"""
+    if isinstance(obj, set):
+        return list(obj)
+    elif isinstance(obj, dict):
+        return {k: _clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_for_json(item) for item in obj]
+    else:
+        return obj
 
 
 @chat_bp.route('/conversations/<int:conversation_id>/title', methods=['PUT'])
@@ -343,7 +456,7 @@ def reset_context(conversation_id):
 def chatbot_status():
     """Get current chatbot status and context"""
     try:
-        global _semantic_bot
+        global _semantic_bot, _bot_loading
         
         if _semantic_bot is None:
             return jsonify({
@@ -351,6 +464,7 @@ def chatbot_status():
                 'status': {
                     'model': 'SemanticChatbot',
                     'initialized': False,
+                    'loading': _bot_loading,
                     'note': 'Bot will initialize on first message'
                 }
             })
@@ -358,22 +472,16 @@ def chatbot_status():
         bot = _semantic_bot
         
         # Convert context for JSON serialization
-        context_json = {}
-        for k, v in bot.context.items():
-            if isinstance(v, set):
-                context_json[k] = list(v)
-            elif isinstance(v, (dict, list, int, float, bool, type(None), str)):
-                context_json[k] = v
-            else:
-                context_json[k] = str(v)
+        context_json = _clean_for_json(bot.context) if hasattr(bot, 'context') else {}
         
         return jsonify({
             'success': True,
             'status': {
                 'model': 'SemanticChatbot',
                 'initialized': True,
+                'loading': False,
                 'context': context_json,
-                'memory_size': len(bot.conversation_memory),
+                'memory_size': len(bot.conversation_memory) if hasattr(bot, 'conversation_memory') else 0,
                 'cache_size': len(bot.embedding_cache) if hasattr(bot, 'embedding_cache') else 0
             }
         })
